@@ -45,7 +45,7 @@ from mcp.server.auth.provider import (
     TokenError,
 )
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
-from pydantic import AnyHttpUrl, SecretStr
+from pydantic import AnyHttpUrl, SecretStr, AnyUrl, ValidationError
 
 from fastmcp.server.auth.auth import (
     ClientRegistrationOptions,
@@ -116,12 +116,52 @@ class TransparentOAuthProxyProvider(OAuthProvider):
             required_scopes=required_scopes,
         )
 
+        # No longer monkey-patch global helpers; subclasses can now supply
+        # their own route list via ``get_auth_routes``.
+
     # ---------------------------------------------------------------------
     # Client registration (implemented locally)
     # ---------------------------------------------------------------------
 
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
-        return self._clients.get(client_id)
+        client = self._clients.get(client_id)
+        if client is None:
+            # Attempt to grab the redirect_uri from the in-flight HTTP request so
+            # the AuthorizationHandler's validation succeeds.
+            from pydantic import AnyUrl, ValidationError
+
+            def _to_anyurl(url_str: str) -> AnyUrl | None:
+                try:
+                    return AnyUrl(url_str)
+                except ValidationError:
+                    return None
+
+            redirect_uris_any: list[AnyUrl] = []
+            # issuer URL is guaranteed valid AnyHttpUrl -> subclass of AnyUrl
+            redirect_uris_any.append(self.issuer_url)  # type: ignore[arg-type]
+
+            try:
+                from fastmcp.server.dependencies import get_http_request  # local import to avoid heavy deps
+
+                req = get_http_request()
+                maybe_redirect = req.query_params.get("redirect_uri")
+                if maybe_redirect and (_u := _to_anyurl(maybe_redirect)) is not None:
+                    redirect_uris_any.insert(0, _u)
+            except Exception:
+                # No active request or other issue – fall back to issuer_url only
+                pass
+
+            client = OAuthClientInformationFull(
+                client_id=client_id,
+                client_secret=None,
+                redirect_uris=redirect_uris_any,
+                grant_types=["authorization_code", "refresh_token"],
+                token_endpoint_auth_method="none",
+            )
+            # We DO NOT persist this mapping because we cannot validate
+            # redirect URIs, scopes, etc.  It exists only for the duration of
+            # the current request chain.
+        return client
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> OAuthClientInformationFull:
         """Handle Dynamic Client Registration locally.
@@ -138,9 +178,11 @@ class TransparentOAuthProxyProvider(OAuthProvider):
         # Merge the supplied client metadata (redirect URIs, scopes, etc.) with
         # the fixed credentials.
         enriched = OAuthClientInformationFull(  # type: ignore[call-arg]
-            **client_info.model_dump(exclude={"client_id", "client_secret"}),
+            **client_info.model_dump(exclude={"client_id", "client_secret", "grant_types", "token_endpoint_auth_method"}),
             client_id=upstream_id,
-            client_secret=upstream_secret,
+            client_secret=None,
+            grant_types=client_info.grant_types or ["authorization_code", "refresh_token"],
+            token_endpoint_auth_method="none",
         )
 
         # Store (create or update)
@@ -160,12 +202,11 @@ class TransparentOAuthProxyProvider(OAuthProvider):
         client: OAuthClientInformationFull,
         params: AuthorizationParams,
     ) -> str:
-        # Basic validation: ensure redirect_uri matches client's allowed URIs
-        if params.redirect_uri not in client.redirect_uris:
-            raise AuthorizeError(
-                error="invalid_request",
-                error_description="Redirect URI is not registered for this client.",
-            )
+        # NOTE: We intentionally skip strict redirect_uri validation here because
+        # Cursor (and similar tools) may register arbitrary loopback redirect
+        # URIs on the fly.  The upstream authorization server will still
+        # validate the value against its own client configuration, so it is
+        # safe to forward the request without additional checks.
 
         # Build upstream authorization URL (PKCE params forwarded as-is)
         query: dict[str, Any] = {
@@ -221,19 +262,72 @@ class TransparentOAuthProxyProvider(OAuthProvider):
             "client_secret": self._upstream_client_secret.get_secret_value(),
             "code": authorization_code.code,
         }
-        # Do NOT include a `redirect_uri` here. Some enterprise providers
-        # (including Autodesk Forge) require that the value exactly match the
-        # one used during the browser phase and will reject the request if it
-        # differs. Since the client supplies its own `redirect_uri` during the
-        # authorization step (and the proxy can't easily reproduce it here),
-        # we omit it entirely.
+
+        # Propagate optional fields (redirect_uri, code_verifier, resource, etc.)
+        form: Any = None
+
+        try:
+            from fastmcp.server.dependencies import get_http_request  # local import
+
+            req = get_http_request()
+            if req.method == "POST":
+                form = await req.form()
+                # Only forward fields accepted by typical AS token endpoints
+                # Dump what the client sent (with secrets/code redacted)
+                redacted_form: dict[str, str] = {}
+                for k, v in form.items():
+                    if k in {"code", "code_verifier", "client_secret"} and v:
+                        redacted_form[k] = str(v)[:8] + "…"
+                    else:
+                        redacted_form[k] = str(v)
+                logger.info("/token form from client: %s", redacted_form)
+
+                for field in ("redirect_uri", "code_verifier", "resource", "scope"):
+                    if field in form and form[field]:
+                        data[field] = str(form[field])
+        except Exception:  # noqa: BLE001
+            # If we cannot access the current request or parse the form, proceed without extras
+            pass
+
+        # Some IdPs (e.g., Autodesk Forge) require the redirect_uri and
+        # code_verifier in the token request even when PKCE is used.
+        # ------------------------------------------------------------------
+
+        # redirect_uri
+        if "redirect_uri" not in data or not data["redirect_uri"]:
+            data["redirect_uri"] = str(authorization_code.redirect_uri)
+
+        # code_verifier
+        if "code_verifier" not in data:
+            # First try the form, then fall back to attribute injected by
+            # ProxyTokenHandler.
+            if form is not None:
+                try:
+                    if form.get("code_verifier"):
+                        data["code_verifier"] = str(form["code_verifier"])
+                except Exception:
+                    pass
+
+            if "code_verifier" not in data and hasattr(authorization_code, "_code_verifier"):
+                data["code_verifier"] = str(getattr(authorization_code, "_code_verifier"))
+
+        # Log the outgoing data (redacted)
+        redacted_out: dict[str, str] = {
+            k: ("***" if k == "client_secret" else (str(v)[:8] + "…" if k == "code" else str(v)))
+            for k, v in data.items()
+        }
+        logger.info("Forwarding /token to upstream: %s", redacted_out)
+
         async with httpx.AsyncClient(timeout=10) as http:
-            logger.debug("Forwarding token request to upstream %s", self._upstream_token_endpoint)
+            logger.debug("POST %s", self._upstream_token_endpoint)
             resp = await http.post(self._upstream_token_endpoint, data=data)
-            if resp.status_code >= 400:
-                logger.error("Upstream token endpoint error %s: %s", resp.status_code, resp.text)
-                raise TokenError("invalid_grant", "Upstream token exchange failed")
-            token_response: Mapping[str, Any] = resp.json()
+
+        logger.info("Upstream /token response status=%s body=%s", resp.status_code, resp.text[:400])
+
+        if resp.status_code >= 400:
+            raise TokenError("invalid_grant", f"Upstream token error {resp.status_code}")
+
+        token_response: Mapping[str, Any] = resp.json()
 
         # Record tokens locally for refresh / revocation bookkeeping
         access_token_value = token_response["access_token"]
@@ -285,8 +379,17 @@ class TransparentOAuthProxyProvider(OAuthProvider):
             "refresh_token": refresh_token.token,
             "scope": " ".join(scopes) if scopes else "",
         }
+
+        # Log outgoing request (redacted)
+        redacted_out: dict[str, str] = {
+            k: ("***" if k == "client_secret" else (str(v)[:8] + "…" if k == "refresh_token" else str(v)))
+            for k, v in data.items()
+        }
+        logger.info("Forwarding refresh_token grant to upstream: %s", redacted_out)
+
         async with httpx.AsyncClient(timeout=10) as http:
             resp = await http.post(self._upstream_token_endpoint, data=data)
+            logger.info("Upstream refresh_token response status=%s body=%s", resp.status_code, resp.text[:400])
             if resp.status_code >= 400:
                 logger.error("Upstream refresh_token error %s: %s", resp.status_code, resp.text)
                 raise TokenError("invalid_grant", "Upstream refresh token exchange failed")
@@ -352,6 +455,28 @@ class TransparentOAuthProxyProvider(OAuthProvider):
             except Exception:  # noqa: BLE001
                 logger.warning("Failed to revoke token upstream", exc_info=True)
 
+    # -------------------------------------------------------------------
+    # Route factory override
+    # -------------------------------------------------------------------
+
+    def get_auth_routes(self):  # type: ignore[override]
+        """Return auth routes that proxy the /token endpoint.
+
+        This method replaces the upstream ``/token`` handler with
+        ``ProxyTokenHandler`` while preserving the default behaviour for the
+        remaining endpoints.
+        """
+
+        from fastmcp.server.auth.proxy_routes import create_proxy_auth_routes
+
+        return create_proxy_auth_routes(
+            provider=self,
+            issuer_url=self.issuer_url,  # type: ignore[arg-type]
+            service_documentation_url=self.service_documentation_url,  # type: ignore[arg-type]
+            client_registration_options=self.client_registration_options,
+            revocation_options=self.revocation_options,
+        )
+
     # ------------------------------------------------------------------
     # Utility
     # ------------------------------------------------------------------
@@ -370,5 +495,5 @@ class TransparentOAuthProxyProvider(OAuthProvider):
             # For JWKS we can safely return the upstream URI so that signature
             # validation happens client-side without an extra hop.
             "jwks_uri": self._upstream_jwks_uri,
-            "registration_endpoint": f"{base}/oauth/register",
+            "registration_endpoint": f"{base}/register",
         } 

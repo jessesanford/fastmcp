@@ -33,14 +33,10 @@ from fastmcp import FastMCP
 from fastmcp.server.auth.providers.transparent_proxy import (
     TransparentOAuthProxyProvider,
 )
-from starlette.responses import RedirectResponse, JSONResponse
+from starlette.responses import JSONResponse
 from starlette.requests import Request
-import httpx
-from urllib.parse import urlencode
-from starlette.routing import Route  # import locally to avoid top-level circularity
+from starlette.routing import Route  # used for custom metadata route
 import logging
-from fastmcp.server.dependencies import get_access_token
-import base64, json
 
 # ---------------------------------------------------------------------------
 # Load the `.env` file (if present).
@@ -98,84 +94,11 @@ def add(a: int, b: int) -> int:  # noqa: D401
 app = mcp.http_app(path="/mcp")
 
 # ---------------------------------------------------------------------------
-# Lightweight proxy routes that mirror fastapi_mcp's `setup_proxies=True`.
-# These bypass FastMCP's internal Authorization/Token handlers so we do not
-# perform local PKCE validation; instead we forward every request to Autodesk
-# after swapping in the *pre-registered* upstream client credentials.
+# Built-in OAuth routes
 # ---------------------------------------------------------------------------
-
-
-@mcp.custom_route("/authorize", methods=["GET"], include_in_schema=False)
-async def proxy_authorize(request: Request):  # noqa: D401
-    """Redirect the browser to the upstream authorization endpoint.
-
-    We replace the *dynamic* client_id that Cursor passes with the static
-    `upstream_client_id` expected by Autodesk. All other query parameters
-    (PKCE, redirect_uri, scopes, etc.) are forwarded untouched.
-    """
-
-    params = dict(request.query_params)
-    params["client_id"] = provider._upstream_client_id  # pyright: ignore [reportPrivateUsage]
-
-    upstream_url = f"{provider._upstream_authorization_endpoint}?{urlencode(params, doseq=True)}"  # pyright: ignore [reportPrivateUsage]
-    logger.info("Redirecting browser to upstream /authorize: %s", upstream_url)
-    return RedirectResponse(upstream_url, status_code=302)
-
-# Insert /authorize with highest precedence
-app.router.routes.insert(0, Route("/authorize", proxy_authorize, methods=["GET"]))
-
-@mcp.custom_route("/token", methods=["POST"], include_in_schema=False)
-async def proxy_token(request: Request):  # noqa: D401
-    """Forward the token request to the upstream server.
-
-    We replace `client_id` / `client_secret` with the proxy's static upstream
-    credentials and stream the JSON response back to the caller.
-    """
-
-    form = await request.form()
-    data = dict(form)
-
-    # Upstream expects the *static* client credentials pre-registered for this
-    # proxy rather than the dynamic credentials issued to the MCP client.
-    data["client_id"] = provider._upstream_client_id  # pyright: ignore [reportPrivateUsage]
-    data["client_secret"] = provider._upstream_client_secret.get_secret_value()  # pyright: ignore [reportPrivateUsage]
-
-    # Ensure `redirect_uri` is a string (Starlette form values can be UploadFile/bytes)
-    if "redirect_uri" in data:
-        data["redirect_uri"] = str(data.get("redirect_uri"))
-
-    redacted = {}
-    for k, v in data.items():
-        sval = str(v)
-        if k in {"code", "client_secret"}:
-            sval = sval[:8] + "…"
-        redacted[k] = sval
-    logger.info("Forwarding token request: %s", redacted)
-
-    async with httpx.AsyncClient(timeout=10) as http:
-        upstream_resp = await http.post(
-            provider._upstream_token_endpoint,
-            data=data,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )  # pyright: ignore [reportPrivateUsage]
-
-    # Dump upstream response body regardless of status
-    body_text = upstream_resp.text
-    logger.info("Upstream /token response %s — body: %s", upstream_resp.status_code, body_text[:300])
-
-    # Try to relay JSON if possible; otherwise relay plain text
-    try:
-        payload = upstream_resp.json()
-    except ValueError:
-        payload = {"error": "upstream_error", "details": body_text}
-
-    return JSONResponse(payload, status_code=upstream_resp.status_code)
-
-# Insert /token with highest precedence
-app.router.routes.insert(0, Route("/token", proxy_token, methods=["POST"]))
-
-# Alias /tokens
-app.router.routes.insert(0, Route("/tokens", proxy_token, methods=["POST"]))
+# TransparentOAuthProxyProvider implements all required OAuth server methods,
+# so we can rely on FastMCP's standard `create_auth_routes` integration.  No
+# additional proxy routes are needed.
 
 # ---------------------------------------------------------------------------
 # Root-level discovery endpoint (avoids /mcp prefix).
