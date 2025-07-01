@@ -8,6 +8,8 @@ so that the proxy-friendly logic is only active when necessary.
 from typing import Any
 
 from starlette.routing import Route
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from mcp.server.auth.routes import (
     create_auth_routes as _orig_create_auth_routes,
@@ -58,4 +60,30 @@ def create_proxy_auth_routes(
             continue  # skip original
         new_routes.append(r)
     new_routes.append(proxy_route)
+
+    # Add ".well-known/oauth-protected-resource" metadata route at the root.
+    async def protected_resource_metadata(request: Request):  # noqa: D401
+        """Return OAuth protected-resource metadata.
+
+        Mirrors RFC 8414 Section 5.  Clients use this endpoint to discover the
+        issuer and the corresponding Authorization Server metadata served by
+        FastMCP when operating as a transparent OAuth proxy.
+        """
+        base = str(request.url.replace(path="")).rstrip("/")
+        jwks_uri = (
+            getattr(provider, "_upstream_jwks_uri", None)
+            or getattr(provider, "jwks_uri", None)
+            or ""
+        )
+        return JSONResponse(
+            {
+                "issuer": base,
+                "authorization_server": f"{base}/.well-known/oauth-authorization-server",
+                "jwks_uri": jwks_uri,
+            }
+        )
+
+    # Prepend the route so that it has high precedence (mirrors behaviour in example)
+    new_routes.insert(0, Route("/.well-known/oauth-protected-resource", protected_resource_metadata, methods=["GET"]))
+
     return new_routes 

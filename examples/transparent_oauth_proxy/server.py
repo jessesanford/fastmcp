@@ -33,9 +33,6 @@ from fastmcp import FastMCP
 from fastmcp.server.auth.providers.transparent_proxy import (
     TransparentOAuthProxyProvider,
 )
-from starlette.responses import JSONResponse
-from starlette.requests import Request
-from starlette.routing import Route  # used for custom metadata route
 import logging
 
 # ---------------------------------------------------------------------------
@@ -99,23 +96,6 @@ app = mcp.http_app(path="/mcp")
 # TransparentOAuthProxyProvider implements all required OAuth server methods,
 # so we can rely on FastMCP's standard `create_auth_routes` integration.  No
 # additional proxy routes are needed.
-
-# ---------------------------------------------------------------------------
-# Root-level discovery endpoint (avoids /mcp prefix).
-# ---------------------------------------------------------------------------
-
-async def protected_resource_metadata(request: Request):  # noqa: D401
-    base = str(request.url.replace(path="")).rstrip("/")
-    return JSONResponse(
-        {
-            "issuer": base,
-            "authorization_server": f"{base}/.well-known/oauth-authorization-server",
-            "jwks_uri": provider._upstream_jwks_uri,  # pyright: ignore [reportPrivateUsage]
-        }
-    )
-
-# Insert route with high precedence
-app.router.routes.insert(0, Route("/.well-known/oauth-protected-resource", protected_resource_metadata, methods=["GET"]))
 
 # ---------------------------------------------------------------------------
 # Additional demo tool: User Info
