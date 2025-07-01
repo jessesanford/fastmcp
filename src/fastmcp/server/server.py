@@ -49,6 +49,7 @@ from fastmcp.resources import Resource, ResourceManager
 from fastmcp.resources.template import ResourceTemplate
 from fastmcp.server.auth.auth import OAuthProvider
 from fastmcp.server.auth.providers.bearer_env import EnvBearerAuthProvider
+from fastmcp.server.auth.providers.oauth_proxy import OAuthProxyProvider
 from fastmcp.server.http import (
     StarletteWithLifespan,
     create_sse_app,
@@ -189,9 +190,60 @@ class FastMCP(Generic[LifespanResultT]):
             lifespan=_lifespan_wrapper(self, lifespan),
         )
 
-        if auth is None and fastmcp.settings.default_auth_provider == "bearer_env":
-            auth = EnvBearerAuthProvider()
+        if auth is None:
+            if fastmcp.settings.default_auth_provider == "bearer_env":
+                auth = EnvBearerAuthProvider()
+            elif fastmcp.settings.oauth_proxy_enabled:
+                # Auto-initialize OAuth proxy provider from settings
+                if not all([
+                    fastmcp.settings.oauth_proxy_client_id,
+                    fastmcp.settings.oauth_proxy_client_secret,
+                    fastmcp.settings.oauth_proxy_upstream_issuer_url,
+                ]):
+                    raise ValueError(
+                        "OAuth proxy enabled but missing required settings: "
+                        "oauth_proxy_client_id, oauth_proxy_client_secret, and "
+                        "oauth_proxy_upstream_issuer_url are all required when "
+                        "oauth_proxy_enabled=True"
+                    )
+                
+                auth = OAuthProxyProvider(
+                    upstream_issuer_url=fastmcp.settings.oauth_proxy_upstream_issuer_url,
+                    proxy_client_id=fastmcp.settings.oauth_proxy_client_id,
+                    proxy_client_secret=fastmcp.settings.oauth_proxy_client_secret,
+                    upstream_jwks_uri=fastmcp.settings.oauth_proxy_upstream_jwks_uri,
+                    default_scopes=fastmcp.settings.oauth_proxy_scopes,
+                    allowed_redirect_uris=fastmcp.settings.oauth_proxy_redirect_uris,
+                )
+                logger.info("OAuth Proxy Provider automatically configured from settings")
+        
         self.auth = auth
+        
+        # Add OAuth Protected Resource Metadata endpoint (RFC 8707) if auth is enabled
+        if self.auth:
+            from starlette.responses import JSONResponse
+            from starlette.routing import Route
+            
+            async def oauth_protected_resource_handler(request):
+                """Serve OAuth 2.0 Protected Resource Metadata (RFC 8707)."""
+                if hasattr(self.auth, 'get_protected_resource_metadata'):
+                    metadata = self.auth.get_protected_resource_metadata()
+                else:
+                    # Default metadata for other OAuth providers
+                    metadata = {
+                        "resource": str(self.auth.issuer_url),
+                        "authorization_servers": [str(self.auth.issuer_url)],
+                        "scopes_supported": getattr(self.auth, 'default_scopes', []) or [],
+                        "bearer_methods_supported": ["header", "body"],
+                        "resource_documentation": str(self.auth.service_documentation_url) if getattr(self.auth, 'service_documentation_url', None) else None,
+                    }
+                    # Remove None values
+                    metadata = {k: v for k, v in metadata.items() if v is not None}
+                return JSONResponse(metadata)
+            
+            self._additional_http_routes.append(
+                Route("/.well-known/oauth-protected-resource", oauth_protected_resource_handler, methods=["GET"])
+            )
 
         if tools:
             for tool in tools:

@@ -94,15 +94,29 @@ def setup_auth_middleware_and_routes(
 
     required_scopes = auth.required_scopes or []
 
-    auth_routes.extend(
-        create_auth_routes(
-            provider=auth,
-            issuer_url=auth.issuer_url,
-            service_documentation_url=auth.service_documentation_url,
-            client_registration_options=auth.client_registration_options,
-            revocation_options=auth.revocation_options,
+    # Check if we're using OAuth proxy provider and need custom routes
+    from fastmcp.server.auth.providers.oauth_proxy import OAuthProxyProvider
+    if isinstance(auth, OAuthProxyProvider):
+        # Use custom proxy routes that properly handle DCR
+        auth_routes.extend(
+            auth.create_proxy_auth_routes(
+                issuer_url=auth.issuer_url,
+                service_documentation_url=auth.service_documentation_url,
+                client_registration_options=auth.client_registration_options,
+                revocation_options=auth.revocation_options,
+            )
         )
-    )
+    else:
+        # Use standard OAuth routes
+        auth_routes.extend(
+            create_auth_routes(
+                provider=auth,
+                issuer_url=auth.issuer_url,
+                service_documentation_url=auth.service_documentation_url,
+                client_registration_options=auth.client_registration_options,
+                revocation_options=auth.revocation_options,
+            )
+        )
 
     return middleware, auth_routes, required_scopes
 

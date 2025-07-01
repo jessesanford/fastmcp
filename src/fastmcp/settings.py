@@ -230,6 +230,125 @@ class Settings(BaseSettings):
         ),
     ] = None
 
+    # OAuth Proxy settings for servers that don't support DCR
+    oauth_proxy_enabled: Annotated[
+        bool,
+        Field(
+            default=False,
+            description=inspect.cleandoc(
+                """
+                Enable OAuth proxy mode for authorization servers that don't support
+                Dynamic Client Registration (DCR). When enabled, the server will act
+                as a proxy, returning pre-configured client credentials instead of
+                performing actual DCR with the upstream OAuth server.
+                """
+            ),
+        ),
+    ] = False
+
+    oauth_proxy_client_id: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description=inspect.cleandoc(
+                """
+                Pre-configured OAuth client ID to return when clients attempt DCR.
+                Required when oauth_proxy_enabled is True.
+                """
+            ),
+        ),
+    ] = None
+
+    oauth_proxy_client_secret: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description=inspect.cleandoc(
+                """
+                Pre-configured OAuth client secret to return when clients attempt DCR.
+                Required when oauth_proxy_enabled is True.
+                """
+            ),
+        ),
+    ] = None
+
+    oauth_proxy_upstream_issuer_url: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description=inspect.cleandoc(
+                """
+                URL of the upstream OAuth authorization server that doesn't support DCR.
+                The proxy will forward actual OAuth flows (authorization, token exchange)
+                to this server using the pre-configured client credentials.
+                Required when oauth_proxy_enabled is True.
+                """
+            ),
+        ),
+    ] = None
+
+    oauth_proxy_scopes: Annotated[
+        list[str] | None,
+        Field(
+            default=None,
+            description=inspect.cleandoc(
+                """
+                Default scopes to include in client registrations when acting as
+                an OAuth proxy. If not specified, will use ['read', 'write'].
+                Can be provided as a comma-separated string via environment variables.
+                """
+            ),
+        ),
+    ] = None
+
+    oauth_proxy_redirect_uris: Annotated[
+        list[str] | None,
+        Field(
+            default=None,
+            description=inspect.cleandoc(
+                """
+                Allowed redirect URIs for OAuth proxy client registrations.
+                If not specified, will accept any redirect URI provided by the client.
+                Can be provided as a comma-separated string via environment variables.
+                """
+            ),
+        ),
+    ] = None
+
+    oauth_proxy_upstream_jwks_uri: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description=inspect.cleandoc(
+                """
+                URL of the upstream OAuth server's JWKS (JSON Web Key Set) endpoint
+                for validating JWT tokens. If not specified, the proxy will attempt
+                to discover the JWKS endpoint using standard OAuth discovery methods.
+                For Autodesk, this is typically: https://developer.api.autodesk.com/authentication/v2/keys
+                """
+            ),
+        ),
+    ] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def parse_comma_separated_values(cls, data: Any) -> Any:
+        """Parse comma-separated strings into lists for OAuth proxy settings."""
+        if isinstance(data, dict):
+            # Handle oauth_proxy_scopes
+            if "oauth_proxy_scopes" in data and isinstance(data["oauth_proxy_scopes"], str):
+                data["oauth_proxy_scopes"] = [
+                    scope.strip() for scope in data["oauth_proxy_scopes"].split(",") if scope.strip()
+                ]
+            
+            # Handle oauth_proxy_redirect_uris 
+            if "oauth_proxy_redirect_uris" in data and isinstance(data["oauth_proxy_redirect_uris"], str):
+                data["oauth_proxy_redirect_uris"] = [
+                    uri.strip() for uri in data["oauth_proxy_redirect_uris"].split(",") if uri.strip()
+                ]
+        
+        return data
+
     include_tags: Annotated[
         set[str] | None,
         Field(
