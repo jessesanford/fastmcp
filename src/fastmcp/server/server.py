@@ -208,14 +208,41 @@ class FastMCP(Generic[LifespanResultT]):
                     )
                 
                 auth = OAuthProxyProvider(
-                    upstream_issuer_url=fastmcp.settings.oauth_proxy_upstream_issuer_url,
-                    proxy_client_id=fastmcp.settings.oauth_proxy_client_id,
-                    proxy_client_secret=fastmcp.settings.oauth_proxy_client_secret,
+                    upstream_issuer_url=str(fastmcp.settings.oauth_proxy_upstream_issuer_url),
+                    proxy_client_id=str(fastmcp.settings.oauth_proxy_client_id),
+                    proxy_client_secret=str(fastmcp.settings.oauth_proxy_client_secret),
                     upstream_jwks_uri=fastmcp.settings.oauth_proxy_upstream_jwks_uri,
                     default_scopes=fastmcp.settings.oauth_proxy_scopes,
                     allowed_redirect_uris=fastmcp.settings.oauth_proxy_redirect_uris,
                 )
                 logger.info("OAuth Proxy Provider automatically configured from settings")
+            elif fastmcp.settings.oauth_passthrough_enabled:
+                # Auto-initialize OAuth passthrough provider from settings
+                from fastmcp.server.auth.providers.oauth_passthrough import OAuthPassthroughProvider
+                
+                if not all([
+                    fastmcp.settings.oauth_passthrough_client_id,
+                    fastmcp.settings.oauth_passthrough_client_secret,
+                    fastmcp.settings.oauth_passthrough_upstream_issuer_url,
+                ]):
+                    raise ValueError(
+                        "OAuth passthrough enabled but missing required settings: "
+                        "oauth_passthrough_client_id, oauth_passthrough_client_secret, and "
+                        "oauth_passthrough_upstream_issuer_url are all required when "
+                        "oauth_passthrough_enabled=True"
+                    )
+                
+                auth = OAuthPassthroughProvider(
+                    upstream_issuer_url=str(fastmcp.settings.oauth_passthrough_upstream_issuer_url),
+                    passthrough_client_id=str(fastmcp.settings.oauth_passthrough_client_id),
+                    passthrough_client_secret=str(fastmcp.settings.oauth_passthrough_client_secret),
+                    upstream_jwks_uri=fastmcp.settings.oauth_passthrough_upstream_jwks_uri,
+                    default_scopes=fastmcp.settings.oauth_passthrough_scopes,
+                    allowed_redirect_uris=fastmcp.settings.oauth_passthrough_redirect_uris,
+                    audience=fastmcp.settings.oauth_passthrough_audience,
+                    required_scopes=["data:read"],  # Default for Autodesk-style scopes
+                )
+                logger.info("OAuth Passthrough Provider automatically configured from settings")
         
         self.auth = auth
         

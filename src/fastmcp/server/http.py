@@ -69,6 +69,105 @@ class RequestContextMiddleware:
             await self.app(scope, receive, send)
 
 
+class OAuth401Middleware:
+    """
+    Middleware to add proper WWW-Authenticate headers to 401 responses
+    so OAuth clients know how to authenticate.
+    """
+    def __init__(self, app, issuer_url: str, scopes: list[str]):
+        self.app = app
+        self.issuer_url = issuer_url
+        self.scopes = scopes
+    
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        
+        # Create a custom send function that intercepts 401 responses
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start" and message.get("status") == 401:
+                # Replace/modify WWW-Authenticate header with proper OAuth 2.0 format
+                scope_str = " ".join(self.scopes) if self.scopes else "data:read"
+                www_authenticate = f'Bearer realm="{self.issuer_url}", scope="{scope_str}", error="invalid_token", error_description="Authentication required"'
+                
+                headers = list(message.get("headers", []))
+                
+                # Remove any existing www-authenticate headers
+                headers = [h for h in headers if h[0].lower() != b"www-authenticate"]
+                
+                # Add our properly formatted OAuth 2.0 WWW-Authenticate header
+                headers.append([b"www-authenticate", www_authenticate.encode()])
+                
+                message = {
+                    **message,
+                    "headers": headers
+                }
+                
+                logger.info(f"🔑 Added OAuth 2.0 WWW-Authenticate header: {www_authenticate}")
+            
+            await send(message)
+        
+        await self.app(scope, receive, send_wrapper)
+
+
+class OAuthPathBypassMiddleware:
+    """
+    Middleware that allows unauthenticated access to OAuth discovery endpoints.
+    
+    This prevents the circular dependency where OAuth endpoints require authentication
+    but clients need to access these endpoints to obtain authentication tokens.
+    """
+    
+    # OAuth paths that should be accessible without authentication
+    OAUTH_DISCOVERY_PATHS = {
+        "/.well-known/oauth-authorization-server",
+        "/.well-known/oauth-protected-resource", 
+        "/oauth/register",
+        "/oauth/authorize",
+        # Note: /oauth/token should still require authentication when used by proxy providers
+    }
+    
+    def __init__(self, app):
+        self.app = app
+    
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            path = scope.get("path", "")
+            
+            # Check if this is an OAuth discovery endpoint
+            if path in self.OAUTH_DISCOVERY_PATHS:
+                # Skip authentication for OAuth discovery endpoints
+                logger.debug(f"🔓 Bypassing authentication for OAuth discovery endpoint: {path}")
+                # Remove any authorization headers to prevent authentication middleware from processing
+                headers = list(scope.get("headers", []))
+                filtered_headers = [h for h in headers if h[0].lower() != b"authorization"]
+                scope["headers"] = filtered_headers
+                scope["oauth_discovery_bypass"] = True
+        
+        await self.app(scope, receive, send)
+
+
+class BypassAwareBearerAuthBackend(BearerAuthBackend):
+    """
+    Custom Bearer Auth Backend that respects OAuth discovery bypass flags.
+    
+    This backend allows OAuth discovery endpoints to be accessed without authentication
+    while still protecting other endpoints.
+    """
+    
+    async def authenticate(self, conn):
+        """Authenticate the connection, respecting OAuth discovery bypass."""
+        
+        # Check if this request has been marked for OAuth discovery bypass
+        if hasattr(conn, 'scope') and conn.scope.get('oauth_discovery_bypass', False):
+            logger.debug("🔓 Skipping authentication for OAuth discovery endpoint")
+            return None  # No authentication required
+        
+        # For all other requests, use normal bearer authentication
+        return await super().authenticate(conn)
+
+
 def setup_auth_middleware_and_routes(
     auth: OAuthProvider,
 ) -> tuple[list[Middleware], list[BaseRoute], list[str]]:
@@ -84,22 +183,49 @@ def setup_auth_middleware_and_routes(
     auth_routes: list[BaseRoute] = []
     required_scopes: list[str] = []
 
-    middleware = [
+    # Add OAuth path bypass middleware FIRST (before authentication middleware)
+    # This allows OAuth discovery endpoints to be accessed without authentication
+    middleware.append(Middleware(OAuthPathBypassMiddleware))
+
+    middleware.extend([
         Middleware(
             AuthenticationMiddleware,
-            backend=BearerAuthBackend(auth),
+            backend=BypassAwareBearerAuthBackend(auth),
         ),
         Middleware(AuthContextMiddleware),
-    ]
+    ])
+
+    # Add OAuth 401 middleware for OAuth passthrough provider
+    from fastmcp.server.auth.providers.oauth_passthrough import OAuthPassthroughProvider
+    if isinstance(auth, OAuthPassthroughProvider):
+        middleware.append(
+            Middleware(
+                OAuth401Middleware,
+                issuer_url=str(auth.issuer_url),
+                scopes=auth.default_scopes or ["data:read"]
+            )
+        )
 
     required_scopes = auth.required_scopes or []
 
-    # Check if we're using OAuth proxy provider and need custom routes
+    # Check if we're using OAuth proxy or passthrough provider and need custom routes
     from fastmcp.server.auth.providers.oauth_proxy import OAuthProxyProvider
+    from fastmcp.server.auth.providers.oauth_passthrough import OAuthPassthroughProvider
+    
     if isinstance(auth, OAuthProxyProvider):
         # Use custom proxy routes that properly handle DCR
         auth_routes.extend(
             auth.create_proxy_auth_routes(
+                issuer_url=auth.issuer_url,
+                service_documentation_url=auth.service_documentation_url,
+                client_registration_options=auth.client_registration_options,
+                revocation_options=auth.revocation_options,
+            )
+        )
+    elif isinstance(auth, OAuthPassthroughProvider):
+        # Use custom passthrough routes that handle DCR proxy + OAuth passthrough
+        auth_routes.extend(
+            auth.create_passthrough_auth_routes(
                 issuer_url=auth.issuer_url,
                 service_documentation_url=auth.service_documentation_url,
                 client_registration_options=auth.client_registration_options,

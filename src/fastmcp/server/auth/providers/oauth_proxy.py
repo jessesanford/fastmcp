@@ -71,6 +71,7 @@ class OAuthProxyProvider(OAuthProvider):
         default_scopes: list[str] | None = None,
         allowed_redirect_uris: list[str] | None = None,
         upstream_jwks_uri: AnyHttpUrl | str | None = None,
+        audience: str | None = None,
         httpx_client_kwargs: Dict[str, Any] | None = None,
     ):
         """
@@ -106,6 +107,7 @@ class OAuthProxyProvider(OAuthProvider):
         self.proxy_client_secret = proxy_client_secret
         self.default_scopes = default_scopes or ["read", "write"]
         self.allowed_redirect_uris = allowed_redirect_uris
+        self.audience = audience  # Store the audience for token requests
         self.httpx_client_kwargs = httpx_client_kwargs or {}
         
         # Storage for registered clients and active flows
@@ -117,6 +119,10 @@ class OAuthProxyProvider(OAuthProvider):
         # For revoking associated tokens
         self._access_to_refresh_map: Dict[str, str] = {}
         self._refresh_to_access_map: Dict[str, str] = {}
+        
+        # Token introspection cache for enriched claims (like userid)
+        self.token_introspection_cache: Dict[str, Dict[str, Any]] = {}
+        self.introspection_cache_expiry: Dict[str, float] = {}
         
         logger.info(f"OAuth Proxy Provider initialized for upstream: {self.upstream_issuer_url}")
         
@@ -341,6 +347,10 @@ class OAuthProxyProvider(OAuthProvider):
                     "client_secret": self.proxy_client_secret,
                     "scope": " ".join(authorization_code.scopes) if authorization_code.scopes else " ".join(self.default_scopes or []),
                 }
+                
+                # 🎯 Add audience for Autodesk to include userid in JWT claims
+                if self.audience:
+                    token_data["audience"] = self.audience
 
                 # Determine token endpoint - Autodesk uses /authentication/v2/token
                 token_endpoint = f"{self.upstream_issuer_url}/authentication/v2/token"
@@ -427,6 +437,10 @@ class OAuthProxyProvider(OAuthProvider):
                     "refresh_token": refresh_token.token,
                     "scope": " ".join(scopes) if scopes else None,
                 }
+                
+                # 🎯 Add audience for Autodesk to include userid in JWT claims
+                if self.audience:
+                    token_data["audience"] = self.audience
                 
                 # Remove None values
                 token_data = {k: v for k, v in token_data.items() if v is not None}
@@ -540,12 +554,21 @@ class OAuthProxyProvider(OAuthProvider):
                     logger.info(f"   scopes: {jwt_scopes}")
                     logger.info(f"   expires_at: {jwt_expires_at}")
                     
-                    return AccessToken(
+                    # Create AccessToken
+                    access_token = AccessToken(
                         token=token,
                         client_id=jwt_client_id,
                         expires_at=jwt_expires_at,
                         scopes=jwt_scopes or self.default_scopes or [],
                     )
+                    
+                    # Also perform token introspection to get enriched claims (like userid)
+                    introspection_data = await self._introspect_token_with_upstream(token)
+                    if introspection_data:
+                        access_token._introspection_data = introspection_data
+                        logger.info(f"🔍 Added introspection data with claims: {list(introspection_data.keys())}")
+                    
+                    return access_token
                     
                 except Exception as e:
                     logger.warning(f"⚠️ Failed to extract JWT claims, using defaults: {e}")
@@ -783,6 +806,79 @@ class OAuthProxyProvider(OAuthProvider):
             logger.error(f"❌ JWT signature verification failed: {e}")
             return False
 
+    async def _introspect_token_with_upstream(self, token: str) -> Dict[str, Any] | None:
+        """
+        Perform OAuth token introspection with the upstream server to get enriched claims.
+        
+        This is similar to what fastapi_mcp does - it calls the upstream server's introspection
+        endpoint to get additional claims like 'userid' that aren't in the JWT itself.
+        """
+        # Check cache first
+        if token in self.token_introspection_cache:
+            if time.time() < self.introspection_cache_expiry.get(token, 0):
+                logger.info("🔍 Using cached token introspection data")
+                return self.token_introspection_cache[token]
+            else:
+                # Expired cache
+                del self.token_introspection_cache[token]
+                del self.introspection_cache_expiry[token]
+        
+        try:
+            # Construct introspection endpoint URL
+            introspection_url = f"{str(self.upstream_issuer_url).rstrip('/')}/authentication/v2/introspect"
+            
+            logger.info(f"🔍 Performing token introspection with upstream: {introspection_url}")
+            
+            # Prepare introspection request
+            introspection_data = {
+                "token": token,
+                "token_type_hint": "access_token"
+            }
+            
+            # Use basic auth with proxy client credentials for introspection
+            import base64
+            auth_string = f"{self.proxy_client_id}:{self.proxy_client_secret}"
+            auth_header = base64.b64encode(auth_string.encode()).decode()
+            
+            headers = {
+                "Authorization": f"Basic {auth_header}",
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Accept": "application/json"
+            }
+            
+            import httpx
+            async with httpx.AsyncClient(**self.httpx_client_kwargs) as client:
+                response = await client.post(
+                    introspection_url,
+                    data=introspection_data,
+                    headers=headers
+                )
+                
+                if response.status_code == 200:
+                    introspection_result = response.json()
+                    
+                    # Check if token is active
+                    if introspection_result.get("active", False):
+                        logger.info("✅ Token introspection successful")
+                        logger.info(f"🔍 Introspection claims: {list(introspection_result.keys())}")
+                        
+                        # Cache the result (cache for 5 minutes or until token expires)
+                        cache_duration = min(300, introspection_result.get("exp", int(time.time()) + 300) - int(time.time()))
+                        self.token_introspection_cache[token] = introspection_result
+                        self.introspection_cache_expiry[token] = time.time() + cache_duration
+                        
+                        return introspection_result
+                    else:
+                        logger.warning("❌ Token introspection indicates inactive token")
+                        return None
+                else:
+                    logger.warning(f"❌ Token introspection failed with status {response.status_code}: {response.text}")
+                    return None
+                    
+        except Exception as e:
+            logger.warning(f"❌ Token introspection error: {str(e)}")
+            return None
+
     async def revoke_token(
         self,
         token: AccessToken | RefreshToken,
@@ -912,6 +1008,10 @@ class OAuthProxyProvider(OAuthProvider):
                         "client_secret": self.proxy_client_secret,
                         "scope": " ".join(self.default_scopes or []),
                     }
+                    
+                    # 🎯 Add audience for Autodesk to include userid in JWT claims
+                    if self.audience:
+                        token_data["audience"] = self.audience
                     
                     token_endpoint = f"{self.upstream_issuer_url}/authentication/v2/token"
                     response = await http_client.post(token_endpoint, data=token_data)

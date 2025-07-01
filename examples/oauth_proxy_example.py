@@ -36,6 +36,10 @@ def create_manual_oauth_proxy_server() -> FastMCP:
     MCP_SCOPES = ["data:read", "data:write", "data:create", "data:search"]
     MCP_ISSUER_URL = "http://localhost:8000"  # Fixed - should be base URL, not include path
     
+    # ✅ CRITICAL: Use the same audience as the working fastapi_mcp implementation
+    # This is what enables JWT tokens to contain the 'userid' claim!
+    AUTODESK_AUDIENCE = "https://developer.api.autodesk.com/authentication/v2/"
+    
     # Create the OAuth proxy provider that will handle DCR by returning
     # pre-configured credentials while forwarding OAuth flows to upstream
     oauth_proxy = OAuthProxyProvider(
@@ -44,6 +48,7 @@ def create_manual_oauth_proxy_server() -> FastMCP:
         proxy_client_secret=PROXY_CLIENT_SECRET,
         issuer_url=MCP_ISSUER_URL,  # Override the advertised issuer URL
         upstream_jwks_uri=f"{UPSTREAM_OAUTH_SERVER}/authentication/v2/keys",  # Autodesk JWKS endpoint
+        audience=AUTODESK_AUDIENCE,  # 🎯 Use the correct audience for userid claims
         default_scopes=MCP_SCOPES,
         allowed_redirect_uris=[
             "http://localhost:8000/callback",
@@ -100,7 +105,8 @@ def create_manual_oauth_proxy_server() -> FastMCP:
             audience = jwt_claims.get('aud', 'unknown')
             expires_at = jwt_claims.get('exp')
             
-            return {
+            # Check if we have introspection data with enriched claims (like userid)
+            result = {
                 "user_id": user_id,
                 "client_id": client_id,
                 "issuer": issuer,
@@ -111,6 +117,24 @@ def create_manual_oauth_proxy_server() -> FastMCP:
                 "jwt_claims_values": jwt_claims,  # Show all actual claim values
                 "message": "User information extracted from Autodesk JWT token"
             }
+            
+            # If we have introspection data, add it and potentially override user_id
+            if hasattr(access_token, '_introspection_data') and access_token._introspection_data:
+                introspection_data = access_token._introspection_data
+                result["introspection_data"] = introspection_data
+                result["introspection_claims_keys"] = list(introspection_data.keys())
+                
+                # Override user_id with userid from introspection if available (like fastapi_mcp)
+                if 'userid' in introspection_data:
+                    result["user_id"] = introspection_data['userid']
+                    result["message"] = "User information extracted from Autodesk token introspection (like fastapi_mcp)"
+                elif 'sub' in introspection_data:
+                    result["user_id"] = introspection_data['sub']
+                    result["message"] = "User information extracted from Autodesk token introspection"
+                else:
+                    result["message"] = "JWT token validated, but no userid found in introspection data"
+            
+            return result
             
         except Exception as e:
             return {

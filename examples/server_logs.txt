@@ -1,0 +1,230 @@
+/home/vscode/.local/lib/python3.13/site-packages/pydantic/_internal/_config.py:323: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+  warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning)
+2025-07-01 16:49:59,328 - asyncio - DEBUG - Using selector: EpollSelector
+[07/01/25 16:49:59] INFO     OAuth Passthrough Provider initialized for upstream:   oauth_passthrough.py:125
+                             https://developer.api.autodesk.com/                                            
+2025-07-01 16:49:59,328 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO - OAuth Passthrough Provider initialized for upstream: https://developer.api.autodesk.com/
+                    INFO     Token validation via JWKS:                             oauth_passthrough.py:126
+                             https://developer.api.autodesk.com/authentication/v2/k                         
+                             eys                                                                            
+2025-07-01 16:49:59,330 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO - Token validation via JWKS: https://developer.api.autodesk.com/authentication/v2/keys
+                    INFO     Pre-registered passthrough client with ID:             oauth_passthrough.py:163
+                             qIbft5FgsUDLRb2d0rprojWgQzbeSomuVoYPhoSWQ50uzjAM                               
+2025-07-01 16:49:59,331 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO - Pre-registered passthrough client with ID: qIbft5FgsUDLRb2d0rprojWgQzbeSomuVoYPhoSWQ50uzjAM
+2025-07-01 16:49:59,331 - mcp.server.lowlevel.server - DEBUG - Initializing server 'OAuth Passthrough Demo (FastMCP)'
+2025-07-01 16:49:59,331 - mcp.server.lowlevel.server - DEBUG - Registering handler for ListToolsRequest
+2025-07-01 16:49:59,331 - mcp.server.lowlevel.server - DEBUG - Registering handler for ListResourcesRequest
+2025-07-01 16:49:59,331 - mcp.server.lowlevel.server - DEBUG - Registering handler for ListResourceTemplatesRequest
+2025-07-01 16:49:59,331 - mcp.server.lowlevel.server - DEBUG - Registering handler for PromptListRequest
+2025-07-01 16:49:59,331 - mcp.server.lowlevel.server - DEBUG - Registering handler for CallToolRequest
+2025-07-01 16:49:59,331 - mcp.server.lowlevel.server - DEBUG - Registering handler for ReadResourceRequest
+2025-07-01 16:49:59,331 - mcp.server.lowlevel.server - DEBUG - Registering handler for GetPromptRequest
+2025-07-01 16:49:59,334 - oauth_flow - INFO - 🔧 Setting up comprehensive OAuth flow logging...
+2025-07-01 16:49:59,334 - oauth_flow - INFO - 📋 Monitoring for the following requests:
+2025-07-01 16:49:59,334 - oauth_flow - INFO -    • /.well-known/oauth-authorization-server (OAuth metadata)
+2025-07-01 16:49:59,334 - oauth_flow - INFO -    • /oauth/register (Dynamic Client Registration)
+2025-07-01 16:49:59,334 - oauth_flow - INFO -    • /oauth/authorize (Authorization endpoint)
+2025-07-01 16:49:59,334 - oauth_flow - INFO -    • /token (Token exchange - should hit Autodesk directly)
+2025-07-01 16:49:59,334 - oauth_flow - INFO -    • /mcp/ (MCP protocol endpoint)
+2025-07-01 16:49:59,334 - oauth_flow - INFO -    • Any other requests from Cursor
+2025-07-01 16:49:59,335 - oauth_flow - INFO - 🚀 Starting server with comprehensive logging...
+2025-07-01 16:49:59,335 - oauth_flow - INFO - 🔍 Watch for these key requests:
+2025-07-01 16:49:59,335 - oauth_flow - INFO -    • GET /.well-known/oauth-authorization-server
+2025-07-01 16:49:59,335 - oauth_flow - INFO -    • POST /oauth/register
+2025-07-01 16:49:59,335 - oauth_flow - INFO -    • GET /oauth/authorize
+2025-07-01 16:49:59,335 - oauth_flow - INFO -    • POST /token ← This should go to Autodesk directly!
+2025-07-01 16:49:59,335 - oauth_flow - INFO -    • POST /mcp/ ← MCP protocol requests
+[07/01/25 16:49:59] INFO     ✅ Created OAuth passthrough routes:                   oauth_passthrough.py:638
+2025-07-01 16:49:59,337 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO - ✅ Created OAuth passthrough routes:
+                    INFO        /.well-known/oauth-authorization-server (metadata   oauth_passthrough.py:639
+                             proxy)                                                                         
+2025-07-01 16:49:59,337 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    /.well-known/oauth-authorization-server (metadata proxy)
+                    INFO        /oauth/register (DCR proxy)                         oauth_passthrough.py:640
+2025-07-01 16:49:59,338 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    /oauth/register (DCR proxy)
+                    INFO        /oauth/authorize (authorization proxy)              oauth_passthrough.py:641
+2025-07-01 16:49:59,338 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    /oauth/authorize (authorization proxy)
+                    INFO        /.well-known/oauth-protected-resource (resource     oauth_passthrough.py:642
+                             metadata)                                                                      
+2025-07-01 16:49:59,339 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    /.well-known/oauth-protected-resource (resource metadata)
+                    INFO        /mcp, /mcp/ (OAuth redirect for unauthenticated MCP oauth_passthrough.py:643
+                             requests)                                                                      
+2025-07-01 16:49:59,339 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    /mcp, /mcp/ (OAuth redirect for unauthenticated MCP requests)
+                    INFO        /oauth/mcp-callback (OAuth callback handler)        oauth_passthrough.py:644
+2025-07-01 16:49:59,340 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    /oauth/mcp-callback (OAuth callback handler)
+                    INFO        🚫 NO /token route - clients hit upstream directly! oauth_passthrough.py:645
+2025-07-01 16:49:59,341 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    🚫 NO /token route - clients hit upstream directly!
+                    INFO     Starting MCP server 'OAuth Passthrough Demo (FastMCP)' with      server.py:1457
+                             transport 'http' on http://0.0.0.0:8000/mcp/                                   
+2025-07-01 16:49:59,341 - FastMCP.fastmcp.server.server - INFO - Starting MCP server 'OAuth Passthrough Demo (FastMCP)' with transport 'http' on http://0.0.0.0:8000/mcp/
+INFO:     Started server process [36216]
+INFO:     Waiting for application startup.
+2025-07-01 16:49:59,346 - mcp.server.streamable_http_manager - INFO - StreamableHTTP session manager started
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+[07/01/25 16:50:09] INFO     🔄 MCP OAuth Redirect Request: GET /mcp                oauth_passthrough.py:520
+2025-07-01 16:50:09,984 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO - 🔄 MCP OAuth Redirect Request: GET /mcp
+                    INFO        Client: curl/7.88.1                                 oauth_passthrough.py:521
+2025-07-01 16:50:09,986 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    Client: curl/7.88.1
+                    INFO        No authentication found - redirecting to OAuth      oauth_passthrough.py:533
+                             authorization                                                                  
+2025-07-01 16:50:09,988 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    No authentication found - redirecting to OAuth authorization
+                    INFO        🚀 Redirecting to:                                  oauth_passthrough.py:574
+                             https://developer.api.autodesk.com/authentication/v2/a                         
+                             uthorize?response_type=code&client_id=qIbft5FgsUDLRb2d                         
+                             0rprojWgQzbeSomuVoYPhoSWQ50uzjAM&redirect_uri=http%3A%                         
+                             2F%2Flocalhost%3A8000%2Foauth%2Fmcp-callback&scope=dat                         
+                             a%3Aread+data%3Awrite+data%3Acreate+data%3Asearch&stat                         
+                             e=j2P2eGdo8V4C3zjm1BSbrq4Btl5VRYj6ZPScb431UJA&code_cha                         
+                             llenge=vCGcIX7P9Rj7qfZFI0XenjxMoXpmEXzRVXDr1CuunuM&cod                         
+                             e_challenge_method=S256&audience=https%3A%2F%2Fdevelop                         
+                             er.api.autodesk.com%2Fauthentication%2Fv2%2F                                   
+2025-07-01 16:50:09,990 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    🚀 Redirecting to: https://developer.api.autodesk.com/authentication/v2/authorize?response_type=code&client_id=qIbft5FgsUDLRb2d0rprojWgQzbeSomuVoYPhoSWQ50uzjAM&redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Foauth%2Fmcp-callback&scope=data%3Aread+data%3Awrite+data%3Acreate+data%3Asearch&state=j2P2eGdo8V4C3zjm1BSbrq4Btl5VRYj6ZPScb431UJA&code_challenge=vCGcIX7P9Rj7qfZFI0XenjxMoXpmEXzRVXDr1CuunuM&code_challenge_method=S256&audience=https%3A%2F%2Fdeveloper.api.autodesk.com%2Fauthentication%2Fv2%2F
+                    INFO        State: j2P2eGdo8V4C3zjm1BSbrq4Btl5VRYj6ZPScb431UJA  oauth_passthrough.py:575
+2025-07-01 16:50:09,992 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    State: j2P2eGdo8V4C3zjm1BSbrq4Btl5VRYj6ZPScb431UJA
+                    INFO        Code challenge:                                     oauth_passthrough.py:576
+                             vCGcIX7P9Rj7qfZFI0XenjxMoXpmEXzRVXDr1CuunuM                                    
+2025-07-01 16:50:09,993 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    Code challenge: vCGcIX7P9Rj7qfZFI0XenjxMoXpmEXzRVXDr1CuunuM
+
+🔧 OAuth Passthrough FastMCP Configuration:
+   ADSK Domain: developer.api.autodesk.com
+   ADSK Audience: https://developer.api.autodesk.com/authentication/v2/
+   ADSK Client ID: qIbft5FgsUDLRb2d0rprojWgQzbeSomuVoYPhoSWQ50uzjAM
+   ADSK Scope: data:read data:write data:create data:search
+   
+🎯 Key Features (equivalent to fastapi_mcp setup_proxies=True):
+   ✅ Proxies OAuth metadata with endpoint overrides
+   ✅ Returns pre-configured credentials for DCR
+   ✅ Redirects authorization to correct Autodesk endpoint
+   ✅ Does NOT intercept /token - clients get real user tokens
+   ✅ Preserves user context (userid claims)
+
+
+🚀 Starting OAuth Passthrough FastMCP Server...
+
+📋 This implementation provides:
+   ✅ Same behavior as fastapi_mcp with setup_proxies=True
+   ✅ Compatible with Cursor OAuth authentication  
+   ✅ Preserves real user context (userid claims)
+   ✅ Uses correct Autodesk endpoints and parameters
+   
+🔍 OAuth Discovery Endpoints:
+   📋 Metadata: http://localhost:8000/.well-known/oauth-authorization-server
+   🔒 Resource: http://localhost:8000/.well-known/oauth-protected-resource
+   
+🎯 MCP Endpoint for Cursor:
+   Settings → MCP → Add global MCP server
+   URL: http://localhost:8000/mcp/
+   
+🛠️  Available Tools:
+   • get_user_info: Shows real user information from Autodesk JWT
+   • protected_action: Demonstrates authenticated operations
+   • compare_with_fastapi_mcp: Explains implementation differences
+   
+🔑 Expected OAuth Flow:
+   1. Cursor does DCR → Gets pre-configured credentials
+   2. Cursor requests authorization → Redirected to Autodesk  
+   3. User authorizes → Gets real user token from Autodesk
+   4. Cursor uses real token → MCP validates via JWT signature
+   5. Tools access real user context (userid claims)
+   
+🔍 HTTP Request Logging:
+   All HTTP requests from Cursor will be logged in detail.
+   Look for requests to /token endpoint after OAuth callback!
+
+INFO:     127.0.0.1:38268 - "GET /mcp HTTP/1.1" 301 Moved Permanently
+[07/01/25 16:50:37] INFO     🔄 MCP OAuth Redirect Request: POST /mcp/              oauth_passthrough.py:520
+2025-07-01 16:50:37,921 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO - 🔄 MCP OAuth Redirect Request: POST /mcp/
+                    INFO        Client: Cursor/1.1.6 (linux arm64)                  oauth_passthrough.py:521
+2025-07-01 16:50:37,923 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    Client: Cursor/1.1.6 (linux arm64)
+                    INFO        No authentication found - redirecting to OAuth      oauth_passthrough.py:533
+                             authorization                                                                  
+2025-07-01 16:50:37,924 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    No authentication found - redirecting to OAuth authorization
+                    INFO        🚀 Redirecting to:                                  oauth_passthrough.py:574
+                             https://developer.api.autodesk.com/authentication/v2/a                         
+                             uthorize?response_type=code&client_id=qIbft5FgsUDLRb2d                         
+                             0rprojWgQzbeSomuVoYPhoSWQ50uzjAM&redirect_uri=http%3A%                         
+                             2F%2Flocalhost%3A8000%2Foauth%2Fmcp-callback&scope=dat                         
+                             a%3Aread+data%3Awrite+data%3Acreate+data%3Asearch&stat                         
+                             e=7iVAAsirAu6HtwGXSQtY1kceq5U8mkfndPJl1YYC8lk&code_cha                         
+                             llenge=Grqxl6EFTZpnd_P3NcHKdohg-lYPX_RD2WcK1QlsoEI&cod                         
+                             e_challenge_method=S256&audience=https%3A%2F%2Fdevelop                         
+                             er.api.autodesk.com%2Fauthentication%2Fv2%2F                                   
+2025-07-01 16:50:37,925 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    🚀 Redirecting to: https://developer.api.autodesk.com/authentication/v2/authorize?response_type=code&client_id=qIbft5FgsUDLRb2d0rprojWgQzbeSomuVoYPhoSWQ50uzjAM&redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Foauth%2Fmcp-callback&scope=data%3Aread+data%3Awrite+data%3Acreate+data%3Asearch&state=7iVAAsirAu6HtwGXSQtY1kceq5U8mkfndPJl1YYC8lk&code_challenge=Grqxl6EFTZpnd_P3NcHKdohg-lYPX_RD2WcK1QlsoEI&code_challenge_method=S256&audience=https%3A%2F%2Fdeveloper.api.autodesk.com%2Fauthentication%2Fv2%2F
+                    INFO        State: 7iVAAsirAu6HtwGXSQtY1kceq5U8mkfndPJl1YYC8lk  oauth_passthrough.py:575
+2025-07-01 16:50:37,927 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    State: 7iVAAsirAu6HtwGXSQtY1kceq5U8mkfndPJl1YYC8lk
+                    INFO        Code challenge:                                     oauth_passthrough.py:576
+                             Grqxl6EFTZpnd_P3NcHKdohg-lYPX_RD2WcK1QlsoEI                                    
+2025-07-01 16:50:37,928 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    Code challenge: Grqxl6EFTZpnd_P3NcHKdohg-lYPX_RD2WcK1QlsoEI
+INFO:     127.0.0.1:33646 - "POST /mcp/ HTTP/1.1" 301 Moved Permanently
+[07/01/25 16:50:38] INFO     🔄 MCP OAuth Redirect Request: GET /mcp/               oauth_passthrough.py:520
+2025-07-01 16:50:38,488 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO - 🔄 MCP OAuth Redirect Request: GET /mcp/
+                    INFO        Client: node                                        oauth_passthrough.py:521
+2025-07-01 16:50:38,491 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    Client: node
+                    INFO        No authentication found - redirecting to OAuth      oauth_passthrough.py:533
+                             authorization                                                                  
+2025-07-01 16:50:38,492 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    No authentication found - redirecting to OAuth authorization
+                    INFO        🚀 Redirecting to:                                  oauth_passthrough.py:574
+                             https://developer.api.autodesk.com/authentication/v2/a                         
+                             uthorize?response_type=code&client_id=qIbft5FgsUDLRb2d                         
+                             0rprojWgQzbeSomuVoYPhoSWQ50uzjAM&redirect_uri=http%3A%                         
+                             2F%2Flocalhost%3A8000%2Foauth%2Fmcp-callback&scope=dat                         
+                             a%3Aread+data%3Awrite+data%3Acreate+data%3Asearch&stat                         
+                             e=hkzbbDJ-9JMr9w2KZfmSapKMug1ub9qW3jdiZFJhCPM&code_cha                         
+                             llenge=z8hkL0Euh-k5a75EnDFJWf0HegRNLiEhDMEGPhiXlIM&cod                         
+                             e_challenge_method=S256&audience=https%3A%2F%2Fdevelop                         
+                             er.api.autodesk.com%2Fauthentication%2Fv2%2F                                   
+2025-07-01 16:50:38,494 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    🚀 Redirecting to: https://developer.api.autodesk.com/authentication/v2/authorize?response_type=code&client_id=qIbft5FgsUDLRb2d0rprojWgQzbeSomuVoYPhoSWQ50uzjAM&redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Foauth%2Fmcp-callback&scope=data%3Aread+data%3Awrite+data%3Acreate+data%3Asearch&state=hkzbbDJ-9JMr9w2KZfmSapKMug1ub9qW3jdiZFJhCPM&code_challenge=z8hkL0Euh-k5a75EnDFJWf0HegRNLiEhDMEGPhiXlIM&code_challenge_method=S256&audience=https%3A%2F%2Fdeveloper.api.autodesk.com%2Fauthentication%2Fv2%2F
+                    INFO        State: hkzbbDJ-9JMr9w2KZfmSapKMug1ub9qW3jdiZFJhCPM  oauth_passthrough.py:575
+2025-07-01 16:50:38,496 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    State: hkzbbDJ-9JMr9w2KZfmSapKMug1ub9qW3jdiZFJhCPM
+                    INFO        Code challenge:                                     oauth_passthrough.py:576
+                             z8hkL0Euh-k5a75EnDFJWf0HegRNLiEhDMEGPhiXlIM                                    
+2025-07-01 16:50:38,498 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    Code challenge: z8hkL0Euh-k5a75EnDFJWf0HegRNLiEhDMEGPhiXlIM
+INFO:     127.0.0.1:33658 - "GET /mcp/ HTTP/1.1" 301 Moved Permanently
+[07/01/25 16:50:43] INFO     🔄 MCP OAuth Redirect Request: POST /mcp/              oauth_passthrough.py:520
+2025-07-01 16:50:43,868 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO - 🔄 MCP OAuth Redirect Request: POST /mcp/
+                    INFO        Client: Cursor/1.1.6 (linux arm64)                  oauth_passthrough.py:521
+2025-07-01 16:50:43,870 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    Client: Cursor/1.1.6 (linux arm64)
+                    INFO        No authentication found - redirecting to OAuth      oauth_passthrough.py:533
+                             authorization                                                                  
+2025-07-01 16:50:43,872 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    No authentication found - redirecting to OAuth authorization
+                    INFO        🚀 Redirecting to:                                  oauth_passthrough.py:574
+                             https://developer.api.autodesk.com/authentication/v2/a                         
+                             uthorize?response_type=code&client_id=qIbft5FgsUDLRb2d                         
+                             0rprojWgQzbeSomuVoYPhoSWQ50uzjAM&redirect_uri=http%3A%                         
+                             2F%2Flocalhost%3A8000%2Foauth%2Fmcp-callback&scope=dat                         
+                             a%3Aread+data%3Awrite+data%3Acreate+data%3Asearch&stat                         
+                             e=yUFuY-2dwoT-7WFpS5FkuuNi7YXShEkAQJ1hKShoJVI&code_cha                         
+                             llenge=XYSlkg1_uJk5jSyn3K5JxEeEmDlgsY_5haldl9ppo_A&cod                         
+                             e_challenge_method=S256&audience=https%3A%2F%2Fdevelop                         
+                             er.api.autodesk.com%2Fauthentication%2Fv2%2F                                   
+2025-07-01 16:50:43,874 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    🚀 Redirecting to: https://developer.api.autodesk.com/authentication/v2/authorize?response_type=code&client_id=qIbft5FgsUDLRb2d0rprojWgQzbeSomuVoYPhoSWQ50uzjAM&redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Foauth%2Fmcp-callback&scope=data%3Aread+data%3Awrite+data%3Acreate+data%3Asearch&state=yUFuY-2dwoT-7WFpS5FkuuNi7YXShEkAQJ1hKShoJVI&code_challenge=XYSlkg1_uJk5jSyn3K5JxEeEmDlgsY_5haldl9ppo_A&code_challenge_method=S256&audience=https%3A%2F%2Fdeveloper.api.autodesk.com%2Fauthentication%2Fv2%2F
+                    INFO        State: yUFuY-2dwoT-7WFpS5FkuuNi7YXShEkAQJ1hKShoJVI  oauth_passthrough.py:575
+2025-07-01 16:50:43,877 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    State: yUFuY-2dwoT-7WFpS5FkuuNi7YXShEkAQJ1hKShoJVI
+                    INFO        Code challenge:                                     oauth_passthrough.py:576
+                             XYSlkg1_uJk5jSyn3K5JxEeEmDlgsY_5haldl9ppo_A                                    
+2025-07-01 16:50:43,878 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    Code challenge: XYSlkg1_uJk5jSyn3K5JxEeEmDlgsY_5haldl9ppo_A
+INFO:     127.0.0.1:33666 - "POST /mcp/ HTTP/1.1" 301 Moved Permanently
+[07/01/25 16:50:44] INFO     🔄 MCP OAuth Redirect Request: GET /mcp/               oauth_passthrough.py:520
+2025-07-01 16:50:44,393 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO - 🔄 MCP OAuth Redirect Request: GET /mcp/
+                    INFO        Client: node                                        oauth_passthrough.py:521
+2025-07-01 16:50:44,395 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    Client: node
+                    INFO        No authentication found - redirecting to OAuth      oauth_passthrough.py:533
+                             authorization                                                                  
+2025-07-01 16:50:44,396 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    No authentication found - redirecting to OAuth authorization
+                    INFO        🚀 Redirecting to:                                  oauth_passthrough.py:574
+                             https://developer.api.autodesk.com/authentication/v2/a                         
+                             uthorize?response_type=code&client_id=qIbft5FgsUDLRb2d                         
+                             0rprojWgQzbeSomuVoYPhoSWQ50uzjAM&redirect_uri=http%3A%                         
+                             2F%2Flocalhost%3A8000%2Foauth%2Fmcp-callback&scope=dat                         
+                             a%3Aread+data%3Awrite+data%3Acreate+data%3Asearch&stat                         
+                             e=7xqPajCpvow9NaId9M0EBKKhmd17At6Cjog-ac4BU9g&code_cha                         
+                             llenge=y6stbsRsteyKbCYHde26c-9gc8YHIykj4urZRuccvCU&cod                         
+                             e_challenge_method=S256&audience=https%3A%2F%2Fdevelop                         
+                             er.api.autodesk.com%2Fauthentication%2Fv2%2F                                   
+2025-07-01 16:50:44,398 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    🚀 Redirecting to: https://developer.api.autodesk.com/authentication/v2/authorize?response_type=code&client_id=qIbft5FgsUDLRb2d0rprojWgQzbeSomuVoYPhoSWQ50uzjAM&redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Foauth%2Fmcp-callback&scope=data%3Aread+data%3Awrite+data%3Acreate+data%3Asearch&state=7xqPajCpvow9NaId9M0EBKKhmd17At6Cjog-ac4BU9g&code_challenge=y6stbsRsteyKbCYHde26c-9gc8YHIykj4urZRuccvCU&code_challenge_method=S256&audience=https%3A%2F%2Fdeveloper.api.autodesk.com%2Fauthentication%2Fv2%2F
+                    INFO        State: 7xqPajCpvow9NaId9M0EBKKhmd17At6Cjog-ac4BU9g  oauth_passthrough.py:575
+2025-07-01 16:50:44,400 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    State: 7xqPajCpvow9NaId9M0EBKKhmd17At6Cjog-ac4BU9g
+                    INFO        Code challenge:                                     oauth_passthrough.py:576
+                             y6stbsRsteyKbCYHde26c-9gc8YHIykj4urZRuccvCU                                    
+2025-07-01 16:50:44,402 - FastMCP.fastmcp.server.auth.providers.oauth_passthrough - INFO -    Code challenge: y6stbsRsteyKbCYHde26c-9gc8YHIykj4urZRuccvCU
+INFO:     127.0.0.1:33672 - "GET /mcp/ HTTP/1.1" 301 Moved Permanently

@@ -315,6 +315,118 @@ class Settings(BaseSettings):
         ),
     ] = None
 
+    # OAuth Passthrough settings for servers that don't support DCR but need real user tokens
+    oauth_passthrough_enabled: Annotated[
+        bool,
+        Field(
+            default=False,
+            description=inspect.cleandoc(
+                """
+                Enable OAuth passthrough mode for authorization servers that don't support
+                Dynamic Client Registration (DCR) but where real user tokens with user context
+                are required. Unlike OAuth proxy which manufactures tokens, passthrough mode
+                passes OAuth flows to the upstream server to get real user JWT tokens.
+                """
+            ),
+        ),
+    ] = False
+
+    oauth_passthrough_client_id: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description=inspect.cleandoc(
+                """
+                Pre-configured OAuth client ID to return when clients attempt DCR.
+                Required when oauth_passthrough_enabled is True.
+                """
+            ),
+        ),
+    ] = None
+
+    oauth_passthrough_client_secret: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description=inspect.cleandoc(
+                """
+                Pre-configured OAuth client secret to return when clients attempt DCR.
+                Required when oauth_passthrough_enabled is True.
+                """
+            ),
+        ),
+    ] = None
+
+    oauth_passthrough_upstream_issuer_url: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description=inspect.cleandoc(
+                """
+                URL of the upstream OAuth authorization server that doesn't support DCR.
+                The passthrough provider will forward OAuth flows to this server to get
+                real user tokens while proxying DCR requests locally.
+                Required when oauth_passthrough_enabled is True.
+                """
+            ),
+        ),
+    ] = None
+
+    oauth_passthrough_scopes: Annotated[
+        list[str] | None,
+        Field(
+            default=None,
+            description=inspect.cleandoc(
+                """
+                Default scopes to include in client registrations when acting as
+                an OAuth passthrough provider. If not specified, will use ['read', 'write'].
+                Can be provided as a comma-separated string via environment variables.
+                """
+            ),
+        ),
+    ] = None
+
+    oauth_passthrough_redirect_uris: Annotated[
+        list[str] | None,
+        Field(
+            default=None,
+            description=inspect.cleandoc(
+                """
+                Allowed redirect URIs for OAuth passthrough client registrations.
+                If not specified, will accept any redirect URI provided by the client.
+                Can be provided as a comma-separated string via environment variables.
+                """
+            ),
+        ),
+    ] = None
+
+    oauth_passthrough_upstream_jwks_uri: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description=inspect.cleandoc(
+                """
+                JWKS URI for JWT token validation if different from the standard discovery
+                endpoint. If not specified, will use {upstream_issuer_url}/authentication/v2/keys.
+                """
+            ),
+        ),
+    ] = None
+
+    oauth_passthrough_audience: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description=inspect.cleandoc(
+                """
+                Expected audience value in JWT tokens for validation. This is critical
+                for some OAuth providers like Autodesk to include user context claims
+                like 'userid' in the JWT tokens.
+                """
+            ),
+        ),
+    ] = None
+
     oauth_proxy_upstream_jwks_uri: Annotated[
         str | None,
         Field(
@@ -333,7 +445,7 @@ class Settings(BaseSettings):
     @model_validator(mode="before")
     @classmethod
     def parse_comma_separated_values(cls, data: Any) -> Any:
-        """Parse comma-separated strings into lists for OAuth proxy settings."""
+        """Parse comma-separated strings into lists for OAuth proxy and passthrough settings."""
         if isinstance(data, dict):
             # Handle oauth_proxy_scopes
             if "oauth_proxy_scopes" in data and isinstance(data["oauth_proxy_scopes"], str):
@@ -345,6 +457,18 @@ class Settings(BaseSettings):
             if "oauth_proxy_redirect_uris" in data and isinstance(data["oauth_proxy_redirect_uris"], str):
                 data["oauth_proxy_redirect_uris"] = [
                     uri.strip() for uri in data["oauth_proxy_redirect_uris"].split(",") if uri.strip()
+                ]
+            
+            # Handle oauth_passthrough_scopes
+            if "oauth_passthrough_scopes" in data and isinstance(data["oauth_passthrough_scopes"], str):
+                data["oauth_passthrough_scopes"] = [
+                    scope.strip() for scope in data["oauth_passthrough_scopes"].split(",") if scope.strip()
+                ]
+            
+            # Handle oauth_passthrough_redirect_uris 
+            if "oauth_passthrough_redirect_uris" in data and isinstance(data["oauth_passthrough_redirect_uris"], str):
+                data["oauth_passthrough_redirect_uris"] = [
+                    uri.strip() for uri in data["oauth_passthrough_redirect_uris"].split(",") if uri.strip()
                 ]
         
         return data
