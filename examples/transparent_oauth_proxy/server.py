@@ -39,8 +39,8 @@ import httpx
 from urllib.parse import urlencode
 from starlette.routing import Route  # import locally to avoid top-level circularity
 import logging
-from fastmcp.server.context import Context
 from fastmcp.server.dependencies import get_access_token
+import base64, json
 
 # ---------------------------------------------------------------------------
 # Load the `.env` file (if present).
@@ -199,25 +199,39 @@ app.router.routes.insert(0, Route("/.well-known/oauth-protected-resource", prote
 # ---------------------------------------------------------------------------
 
 @mcp.tool(name="user_info", description="Return information about the currently authenticated OAuth client")
-async def user_info(ctx: Context) -> dict[str, str]:  # noqa: D401
-    """Return the `client_id` embedded in the bearer token used for this request.
+async def user_info() -> dict[str, str]:  # noqa: D401
+    """Return the `client_id` embedded in the bearer token used for this request."""
 
-    The access token has already been verified by the TransparentOAuthProxyProvider
-    and attached to the request context by FastMCP's auth middleware.  We simply
-    pull it out via `get_access_token()` and pluck the *client_id* claim.
-    """
+    from fastmcp.server.dependencies import (
+        get_access_token as _get_access_token,
+        get_context as _get_context,
+    )
 
+    # Retrieve context and token dynamically to avoid circular import at module load time.
     try:
-        access_token = get_access_token()
+        ctx = _get_context()
+        access_token = _get_access_token()
     except RuntimeError:
-        # No token available – tool was called without authentication.
-        await ctx.error("No access token found in request – are you authenticated?")
-        raise ValueError("Unauthorized: missing bearer token")
+        raise ValueError("Unauthorized: missing bearer token") from None
 
-    client_id = access_token.client_id if access_token else None
-    if not client_id:
-        await ctx.error("Bearer token did not contain client_id claim")
-        raise ValueError("Bearer token missing client_id claim")
+    import base64, json  # noqa: WPS433
 
-    # Minimal payload – extend with more claims if desired.
-    return {"client_id": client_id} 
+    token_str = access_token.token  # type: ignore[attr-defined]
+    # Manually decode JWT payload without verifying signature to avoid external deps
+    parts = token_str.split(".")
+    if len(parts) < 2:
+        raise ValueError("Malformed JWT token")
+
+    payload_b64 = parts[1] + "=" * (-len(parts[1]) % 4)
+    try:
+        payload_json = base64.urlsafe_b64decode(payload_b64).decode()
+        claims = json.loads(payload_json)
+    except Exception:
+        claims = {}
+
+    user_id = str(claims.get("userid") or claims.get("sub") or "unknown")
+    client_id = str(claims.get("client_id") or "unknown")
+
+    await ctx.info("Retrieved user info from token claims")
+
+    return {"userid": user_id, "client_id": client_id}
