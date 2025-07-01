@@ -126,34 +126,29 @@ class TransparentOAuthProxyProvider(OAuthProvider):
     async def register_client(self, client_info: OAuthClientInformationFull) -> OAuthClientInformationFull:
         """Handle Dynamic Client Registration locally.
 
-        If the incoming request omits `client_id`/`client_secret` (the normal
-        case for *initial* registration) we generate them.  These credentials
-        are **local-only** – we always use the single configured
-        `upstream_client_id`/`_secret` when talking to Autodesk – but the MCP
-        client (e.g., Cursor) still expects to receive unique credentials.
+        Always use the pre-configured upstream credentials so that tools like
+        Cursor receive deterministic values that match what they must later
+        present during token exchange.  We **ignore** any client_id or
+        client_secret provided by the caller.
         """
 
-        cid = client_info.client_id or secrets.token_hex(16)
-        if getattr(client_info, "client_secret", None) is not None:
-            # Convert SecretStr to raw str for model constructor
-            _raw_secret = (
-                client_info.client_secret.get_secret_value()
-                if isinstance(client_info.client_secret, SecretStr)
-                else str(client_info.client_secret)
-            )
-        else:
-            _raw_secret = secrets.token_hex(32)
+        upstream_id = self._upstream_client_id
+        upstream_secret = self._upstream_client_secret.get_secret_value()
 
-        # Build a new object so all required fields are present
+        # Merge the supplied client metadata (redirect URIs, scopes, etc.) with
+        # the fixed credentials.
         enriched = OAuthClientInformationFull(  # type: ignore[call-arg]
             **client_info.model_dump(exclude={"client_id", "client_secret"}),
-            client_id=cid,
-            client_secret=_raw_secret,
+            client_id=upstream_id,
+            client_secret=upstream_secret,
         )
 
         # Store (create or update)
-        self._clients[cid] = enriched
-        logger.debug("Registered client %s (redirect URIs: %s)", cid, enriched.redirect_uris)
+        # Because every registration returns the same credentials, all callers
+        # will share a single entry in `_clients`.  Subsequent registrations
+        # simply update the stored metadata.
+        self._clients[upstream_id] = enriched
+        logger.debug("Registered client (shared) %s (redirect URIs: %s)", upstream_id, enriched.redirect_uris)
         return enriched
 
     # ------------------------------------------------------------------
